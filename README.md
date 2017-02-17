@@ -15,39 +15,47 @@ Obtain SSL certificates from the letsencrypt.org ACME server.  Suitable for auto
 * **Reload services** - After a new certificate is obtained then the relevant services (e.g. apache/nginx/postfix) can be reloaded.
 
 ## Installation
-Since the script is only one file, you can use the command
+Since the script is only one file, you can use the following command for a quick installation of GetSSL only:
 ```
 curl --silent https://raw.githubusercontent.com/srvrco/getssl/master/getssl > getssl ; chmod 700 getssl
 ```
-Which will copy the getssl bash script to the current location and change the permissions to make it executable for you.
+This will copy the getssl Bash script to the current location and change the permissions to make it executable for you.
 
-Alternative you can use git
+For a more comprehensive installation (e.g. install also helper scripts) use the provided Makefile with each release tarball. Use the `install` target.
+
+You'll find the latest version in the git repository:
+
 ```
 git clone https://github.com/srvrco/getssl.git
 ```
+
+For Arch Linux there are packages in the AUR, see [here](https://aur.archlinux.org/packages/getssl/) and [there](https://aur.archlinux.org/packages/getssl-git/).
+
+If you use puppet, there is a [GetSSL Puppet module](https://github.com/dthielking/puppet_getssl) by dthielking
 
 ## Overview
 
 GetSSL was written in standard bash ( so it can be run on a server,  a desktop computer, or even a virtualbox) and add the checks, and certificates to a remote server ( providing you have a ssh with key, sftp or ftp access to the remote server).
 
 ```
-getssl ver. 1.81
+getssl ver. 2.02
 Obtain SSL certificates from the letsencrypt.org ACME server
 
-Usage: getssl [-h|--help] [-d|--debug] [-c|--create] [-f|--force] [-a|--all] [-q|--quiet] [-Q|--mute] [-u|--upgrade] [-U|--nocheck] [-r|--revoke cert key] [-w working_dir] domain
+Usage: getssl [-h|--help] [-d|--debug] [-c|--create] [-f|--force] [-a|--all] [-q|--quiet] [-Q|--mute] [-u|--upgrade] [-k|--keep #] [-U|--nocheck] [-r|--revoke cert key] [-w working_dir] domain
 
 Options:
-  -a, --all       Check all certificates
-  -d, --debug     Outputs debug information
-  -c, --create    Create default config files
-  -f, --force     Force renewal of cert (overrides expiry checks)
-  -h, --help      Display this help message and exit
-  -q, --quiet     Quiet mode (only outputs on error, success of new cert, or getssl was upgraded)
-  -Q, --mute      Like -q, but mutes notification about successful upgrade
-  -r, --revoke cert key  [CA_server] Revoke a certificate (the cert and key are required)
-  -u, --upgrade   Upgrade getssl if a more recent version is available
-  -U, --nocheck   Do not check if a more recent version is available
-  -w working_dir  Working directory
+  -a, --all          Check all certificates
+  -d, --debug        Outputs debug information
+  -c, --create       Create default config files
+  -f, --force        Force renewal of cert (overrides expiry checks)
+  -h, --help         Display this help message and exit
+  -q, --quiet        Quiet mode (only outputs on error, success of new cert, or getssl was upgraded)
+  -Q, --mute         Like -q, but mutes notification about successful upgrade
+  -r, --revoke   "cert" "key" [CA_server] Revoke a certificate (the cert and key are required)
+  -u, --upgrade      Upgrade getssl if a more recent version is available
+  -k, --keep     "#" Maximum amount of old getssl versions to keep when upgrading
+  -U, --nocheck      Do not check if a more recent version is available
+  -w working_dir "Working directory"
 ```
 
 ## Getting started
@@ -93,7 +101,7 @@ reloading SSL services
 Change the server in your config file to get a fully valid certificate.
 
 **Note:**   Verification is done via port 80(http), port 443(https) or dns.  The certificate can be used ( and checked with getssl) on alternate ports.
- 
+
 ## Automating updates
 
 I use the following cron
@@ -110,7 +118,7 @@ The cron will automatically update getssl and  renew any certificates, only givi
 
 The design aim was to provide flexibility in running the code.  The default working directory is ~/.getssl ( which can be modified via the command line)
 
-Within the **working directory** is a config file, getssl.cfg which is a simple bash file containing variables, an example of which is 
+Within the **working directory** is a config file, getssl.cfg which is a simple bash file containing variables, an example of which is
 
 ```
 # Uncomment and modify any variables you need
@@ -138,6 +146,9 @@ then, within the **working directory** there will be a folder for each certifica
 
 ```
 # Uncomment and modify any variables you need
+# see https://github.com/srvrco/getssl/wiki/Config-variables for details
+# see https://github.com/srvrco/getssl/wiki/Example-config-files for example configs
+#
 # The staging server is best for testing
 #CA="https://acme-staging.api.letsencrypt.org"
 # This server issues full certificates, however has rate limits
@@ -145,22 +156,24 @@ then, within the **working directory** there will be a folder for each certifica
 
 #AGREEMENT="https://letsencrypt.org/documents/LE-SA-v1.1.1-August-1-2016.pdf"
 
-# Set an email address associated with your account - generally set at account level rather than domain.
-#ACCOUNT_EMAIL="me@example.com"
-#ACCOUNT_KEY_LENGTH=4096
-#ACCOUNT_KEY="/home/user/.getssl/account.key"
 PRIVATE_KEY_ALG="rsa"
 
 # Additional domains - this could be multiple domains / subdomains in a comma separated list
-SANS=www.example.org,example.edu,example.net,example.org,www.example.com,www.example.edu,www.example.net
+SANS="www.example.org"
 
 # Acme Challenge Location. The first line for the domain, the following ones for each additional domain.
 # If these start with ssh: then the next variable is assumed to be the hostname and the rest the location.
 # An ssh key will be needed to provide you with access to the remote server.
-# If these start with ftp: or sftp: then the next variables are userid:password:servername:ACL_location
-ACL=('/var/www/example.com/web/.well-known/acme-challenge'
-     'ssh:server5:/var/www/example.com/web/.well-known/acme-challenge'
-     'ftp:ftpuserid:ftppassword:example.com:/web/.well-known/acme-challenge')
+# Optionally, you can specify a different userid for ssh/scp to use on the remote server before the @ sign.
+# If left blank, the username on the local server will be used to authenticate against the remote server.
+# If these start with ftp: then the next variables are ftpuserid:ftppassword:servername:ACL_location
+# These should be of the form "/path/to/your/website/folder/.well-known/acme-challenge"
+# where "/path/to/your/website/folder/" is the path, on your web server, to the web root for your domain.
+#ACL=('/var/www/${DOMAIN}/web/.well-known/acme-challenge'
+#     'ssh:server5:/var/www/${DOMAIN}/web/.well-known/acme-challenge'
+#     'ssh:sshuserid@server5:/var/www/${DOMAIN}/web/.well-known/acme-challenge'
+#     'ftp:ftpuserid:ftppassword:${DOMAIN}:/web/.well-known/acme-challenge')
+
 
 # Location for all your certs, these can either be on the server (so full path name) or using ssh as for the ACL
 DOMAIN_CERT_LOCATION="ssh:server5:/etc/ssl/domain.crt"
@@ -172,8 +185,6 @@ DOMAIN_KEY_LOCATION="ssh:server5:/etc/ssl/domain.key"
 
 # The command needed to reload apache / nginx or whatever you use
 RELOAD_CMD="service apache2 reload"
-# The time period within which you want to allow renewal of a certificate - this prevents hitting some of the rate limits.
-#RENEW_ALLOW="30"
 
 # Define the server type. This can be https, ftp, ftpi, imap, imaps, pop3, pop3s, smtp,
 # smtps_deprecated, smtps, smtp_submission, xmpp, xmpps, ldaps or a port number which
@@ -181,16 +192,9 @@ RELOAD_CMD="service apache2 reload"
 # an update to confirm correct certificate is running (if CHECK_REMOTE) is set to true
 #SERVER_TYPE="https"
 #CHECK_REMOTE="true"
-
-# Use the following 3 variables if you want to validate via DNS
-#VALIDATE_VIA_DNS="true"
-#DNS_ADD_COMMAND=
-#DNS_DEL_COMMAND=
-# If your DNS-server needs extra time to make sure your DNS changes are readable by the ACME-server (time in seconds)
-#DNS_EXTRA_WAIT=60
 ```
 
-If a location for a file starts with ssh:  it is assumed the next part of the file is the hostname, followed by a colon, and then the path. 
+If a location for a file starts with ssh:  it is assumed the next part of the file is the hostname, followed by a colon, and then the path.
 Files will be securely copied using scp, and it assumes that you have a key on the server ( for passwordless access).  You can set the user, port etc for the server in your .ssh/config file
 
 If an ACL starts with ftp: or sftp: it as assumed that the line is in the format "ftp:UserID:Password:servername:/path/to/acme-challenge". sftp requires sshpass.
@@ -198,6 +202,32 @@ Note:  FTP can be used for copying tokens only and can **not** be used for uploa
 
 ssh can also be used for the reload command if using on remote servers.
 
+Multiple locations can be defined for a file by separating the locations with a semi-colon.
+
+
+A typical config file for example.com and www.example.com on the same server would be
+```
+# uncomment and modify any variables you need
+# The staging server is best for testing
+CA="https://acme-staging.api.letsencrypt.org"
+# This server issues full certificates, however has rate limits
+#CA="https://acme-v01.api.letsencrypt.org"
+
+# additional domains - this could be multiple domains / subdomains in a comma separated list
+SANS="www.example.com"
+
+#Acme Challenge Location.   The first line for the domain, the following ones for each additional domain
+ACL=('/var/www/example.com/web/.well-known/acme-challenge')
+
+USE_SINGLE_ACL="true"
+
+DOMAIN_CERT_LOCATION="/etc/ssl/example.com.crt"
+DOMAIN_KEY_LOCATION="/etc/ssl/example.com.key"
+CA_CERT_LOCATION="/etc/ssl/example.com.bundle"
+
+RELOAD_CMD="service apache2 reload"
+
+```
 
 ## Server-Types
 OpenSSL has built-in support for getting the certificate from a number of SSL services
@@ -226,9 +256,10 @@ these are available in getssl to check if the certificate is installed correctly
 
 In general revoking a certificate is not required.
 
-usage: getssl -r path/to/cert path/to/key
+usage: getssl -r path/to/cert path/to/key [CA_server]
 
-You need to specify both the certificate you want to revoke, and the account or private domain key which was used to sign / obtain the original key.
+You need to specify both the certificate you want to revoke, and the account or private domain key which was used to sign / obtain the original certificate.  The CA_server is an optional parameter and defaults to Let's Encrypt ( "https://acme-v01.api.letsencrypt.org" ) as that is currently the only Certificate Authority using the ACME protocol.
+
 
 ##Elliptic curve keys
 You can use Elliptic curve keys for both the account key and the domain key (different of course, don't use the same key for both). prime256v1 (NIST P-256) and secp384r1 (NIST P-384) are both fully supported.  secp521r1 (NIST P-521) is included in the code, but not currently supported by Let's Encrypt).
